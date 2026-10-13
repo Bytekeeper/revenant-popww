@@ -18,6 +18,10 @@ Height=0
 ; 1 = fullscreen, 0 = window.
 Fullscreen=1
 
+[Video]
+; 1 leaves out the logo videos at startup. Cinematics end with Esc, Space, Enter or gamepad A/B/Start.
+SkipLogos=1
+
 ; Overrides for the hardware description the old launcher wrote to Hardware.INI,
 ; as [Hardware.<section>] key=value, e.g.:
 ; [Hardware.CAPS]
@@ -48,6 +52,7 @@ pub struct Config {
     pub width: u32,
     pub height: u32,
     pub fullscreen: bool,
+    pub skip_logos: bool,
 }
 
 pub fn get() -> &'static Config {
@@ -66,8 +71,15 @@ fn load() -> Config {
         width: positive_or(read("Display", "Width", 0), desktop_width),
         height: positive_or(read("Display", "Height", 0), desktop_height),
         fullscreen: read("Display", "Fullscreen", 1) != 0,
+        skip_logos: read("Video", "SkipLogos", 1) != 0,
     };
-    log!("config: {}x{} fullscreen={}", config.width, config.height, config.fullscreen);
+    log!(
+        "config: {}x{} fullscreen={} skip_logos={}",
+        config.width,
+        config.height,
+        config.fullscreen,
+        config.skip_logos
+    );
     config
 }
 

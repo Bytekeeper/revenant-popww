@@ -11,6 +11,8 @@ mod hardware;
 mod hooks;
 #[cfg(windows)]
 mod log;
+#[cfg(windows)]
+mod video;
 
 #[cfg(windows)]
 static MODULE_DIR: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
@@ -49,6 +51,7 @@ mod entry {
             crate::log::log!("popww {} loaded", env!("CARGO_PKG_VERSION"));
             // Hooks go in before pop2.exe's UPX stub runs, so they also cover the unpacked game.
             crate::hooks::install_all();
+            crate::video::install();
         }
         TRUE
     }
