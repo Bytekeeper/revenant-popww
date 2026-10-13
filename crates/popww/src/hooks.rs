@@ -14,7 +14,7 @@ use windows_sys::Win32::Storage::FileSystem::WIN32_FIND_DATAA;
 use windows_sys::Win32::System::LibraryLoader::{GetModuleHandleW, GetProcAddress};
 use windows_sys::core::{PCSTR, w};
 
-use crate::{casefix, hardware};
+use crate::{casefix, game, hardware};
 use crate::log::log;
 
 thread_local! {
@@ -154,8 +154,20 @@ unsafe fn hardware_value(section: PCSTR, key: PCSTR, file: PCSTR) -> Option<Stri
 hook!(WritePrivateProfileStringA, WRITE_PRIVATE_PROFILE_STRING_A,
     fn(section: PCSTR, key: PCSTR, value: PCSTR, file: PCSTR) -> BOOL, paths(file));
 
+static GET_COMMAND_LINE_A: AtomicUsize = AtomicUsize::new(0);
+
+/// The C runtime's first call after UPX has unpacked the game; the moment to patch it.
+#[allow(non_snake_case)]
+unsafe extern "system" fn GetCommandLineA() -> PCSTR {
+    game::on_startup();
+    let original: unsafe extern "system" fn() -> PCSTR =
+        unsafe { std::mem::transmute(GET_COMMAND_LINE_A.load(Ordering::Relaxed)) };
+    unsafe { original() }
+}
+
 pub fn install_all() {
-    let hooks: [(&CStr, *const (), &AtomicUsize); 12] = [
+    let hooks: [(&CStr, *const (), &AtomicUsize); 13] = [
+        (c"GetCommandLineA", GetCommandLineA as *const (), &GET_COMMAND_LINE_A),
         (c"CreateFileA", CreateFileA as *const (), &CREATE_FILE_A),
         (c"FindFirstFileA", FindFirstFileA as *const (), &FIND_FIRST_FILE_A),
         (c"GetFileAttributesA", GetFileAttributesA as *const (), &GET_FILE_ATTRIBUTES_A),
