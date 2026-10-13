@@ -57,6 +57,7 @@ pub fn on_startup() {
         return;
     }
     DONE.store(true, Ordering::Relaxed);
+    log!("game unpacked");
     for patch in PATCHES {
         if unsafe { matches(patch.address, patch.original) } {
             unsafe { write(patch.address, patch.replacement) };

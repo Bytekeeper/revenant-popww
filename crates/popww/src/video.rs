@@ -102,11 +102,13 @@ unsafe extern "system" fn bink_open(name: *const u8, flags: u32) -> *mut c_void 
             Kind::Other
         };
         LAST_KIND.store(kind as usize, Ordering::Relaxed);
+        log!("video {file}");
         kind
     };
     if kind == Kind::Logo && config::get().skip_logos {
         return std::ptr::null_mut();
     }
+
     let original: BinkOpen = unsafe { std::mem::transmute(ORIGINAL_OPEN.load(Ordering::Relaxed)) };
     let video = unsafe { original(name, flags) };
     if !video.is_null() {

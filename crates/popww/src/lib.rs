@@ -48,7 +48,8 @@ mod entry {
         if reason == DLL_PROCESS_ATTACH {
             let _ = crate::MODULE_DIR.set(directory_of(module));
             crate::log::init();
-            crate::log::log!("popww {} loaded", env!("CARGO_PKG_VERSION"));
+            let since_epoch = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default();
+            crate::log::log!("popww {} loaded at unix time {:.3}", env!("CARGO_PKG_VERSION"), since_epoch.as_secs_f64());
             // Hooks go in before pop2.exe's UPX stub runs, so they also cover the unpacked game.
             crate::hooks::install_all();
             crate::video::install();
