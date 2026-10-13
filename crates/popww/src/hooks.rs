@@ -14,7 +14,7 @@ use windows_sys::Win32::Storage::FileSystem::WIN32_FIND_DATAA;
 use windows_sys::Win32::System::LibraryLoader::{GetModuleHandleW, GetProcAddress};
 use windows_sys::core::{PCSTR, w};
 
-use crate::{casefix, game, hardware};
+use crate::{casefix, config, game, hardware};
 use crate::log::log;
 
 thread_local! {
@@ -159,6 +159,8 @@ static GET_COMMAND_LINE_A: AtomicUsize = AtomicUsize::new(0);
 /// The C runtime's first call after UPX has unpacked the game; the moment to patch it.
 #[allow(non_snake_case)]
 unsafe extern "system" fn GetCommandLineA() -> PCSTR {
+    // Before the game switches the display mode, so "desktop resolution" is still the desktop's.
+    config::get();
     game::on_startup();
     let original: unsafe extern "system" fn() -> PCSTR =
         unsafe { std::mem::transmute(GET_COMMAND_LINE_A.load(Ordering::Relaxed)) };

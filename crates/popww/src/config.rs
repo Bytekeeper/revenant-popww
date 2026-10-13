@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use std::sync::OnceLock;
 
 use windows_sys::Win32::Graphics::Gdi::{DEVMODEW, ENUM_CURRENT_SETTINGS, EnumDisplaySettingsW};
-use windows_sys::Win32::System::WindowsProgramming::GetPrivateProfileIntW;
+use windows_sys::Win32::System::WindowsProgramming::{GetPrivateProfileIntW, GetPrivateProfileStringW};
 
 use crate::log::log;
 
@@ -17,7 +17,32 @@ Width=0
 Height=0
 ; 1 = fullscreen, 0 = window.
 Fullscreen=1
+
+; Overrides for the hardware description the old launcher wrote to Hardware.INI,
+; as [Hardware.<section>] key=value, e.g.:
+; [Hardware.CAPS]
+; InvertFogRange=1
 ";
+
+/// A `[Hardware.<section>]` value from `popww.ini`.
+pub fn hardware_override(section: &str, key: &str) -> Option<String> {
+    use std::os::windows::ffi::OsStrExt;
+    let wide = |s: &str| s.encode_utf16().chain([0]).collect::<Vec<u16>>();
+    let file: Vec<u16> = crate::module_dir().join("popww.ini").as_os_str().encode_wide().chain([0]).collect();
+    let mut out = [0u16; 512];
+    let len = unsafe {
+        GetPrivateProfileStringW(
+            wide(&format!("Hardware.{section}")).as_ptr(),
+            wide(key).as_ptr(),
+            wide("\u{1}").as_ptr(),
+            out.as_mut_ptr(),
+            out.len() as u32,
+            file.as_ptr(),
+        )
+    } as usize;
+    let value = String::from_utf16_lossy(&out[..len]);
+    (value != "\u{1}").then_some(value)
+}
 
 pub struct Config {
     pub width: u32,

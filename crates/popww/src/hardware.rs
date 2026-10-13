@@ -25,7 +25,8 @@ const CAPS: &[(&str, &str)] = &[
     ("PureDevice", "0"),
     ("WFog", "1"),
     ("ZFog", "1"),
-    ("PixelFog", "1"),
+    // Pixel (table) fog turns the whole menu scene white, at least under Wine; vertex fog works.
+    ("PixelFog", "0"),
     ("FogRange", "1"),
     ("VertexFog", "1"),
     ("ZBias", "1"),
@@ -52,6 +53,9 @@ const CAPS: &[(&str, &str)] = &[
 /// Our value for a `Hardware.INI` key; None leaves the game's own default.
 pub fn value(section: &str, key: &str) -> Option<String> {
     let section = section.to_ascii_uppercase();
+    if let Some(value) = crate::config::hardware_override(&section, key) {
+        return Some(value);
+    }
     let fixed = match (section.as_str(), key) {
         ("VIDEO", "Resolutions") => return Some(resolutions().clone()),
         ("VIDEO", "AdapterFormats") => "D3DFMT_X8R8G8B8",
