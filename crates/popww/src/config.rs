@@ -17,6 +17,8 @@ Width=0
 Height=0
 ; 1 = fullscreen, 0 = window.
 Fullscreen=1
+; 1 = the 3D view widens with the screen (Hor+), 0 = the original 4:3 view stretched.
+Widescreen=1
 
 [Video]
 ; 1 leaves out the logo videos at startup. Cinematics end with Esc, Space, Enter or gamepad A/B/Start.
@@ -52,6 +54,7 @@ pub struct Config {
     pub width: u32,
     pub height: u32,
     pub fullscreen: bool,
+    pub widescreen: bool,
     pub skip_logos: bool,
 }
 
@@ -71,13 +74,15 @@ fn load() -> Config {
         width: positive_or(read("Display", "Width", 0), desktop_width),
         height: positive_or(read("Display", "Height", 0), desktop_height),
         fullscreen: read("Display", "Fullscreen", 1) != 0,
+        widescreen: read("Display", "Widescreen", 1) != 0,
         skip_logos: read("Video", "SkipLogos", 1) != 0,
     };
     log!(
-        "config: {}x{} fullscreen={} skip_logos={}",
+        "config: {}x{} fullscreen={} widescreen={} skip_logos={}",
         config.width,
         config.height,
         config.fullscreen,
+        config.widescreen,
         config.skip_logos
     );
     config

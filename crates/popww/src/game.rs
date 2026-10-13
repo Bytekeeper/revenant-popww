@@ -33,6 +33,17 @@ const PATCHES: &[Patch] = &[Patch {
 const FIND_AVAILABLE_DISPLAY_MODE: usize = 0x414490;
 const FIND_AVAILABLE_DISPLAY_MODE_START: &[u8] = &[0x56, 0x8b, 0x74, 0x24, 0x08, 0x57, 0x56, 0x8b, 0xf9];
 
+/// The camera's projection setup ends in `push 0xd705f0; mov ecx, renderer; call SetViewProjection`.
+const SET_PROJECTION_CALL: usize = 0x7452f4;
+const SET_PROJECTION_CALL_ORIGINAL: &[u8] = &[0xe8, 0x27, 0x88, 0x00, 0x00];
+const SET_VIEW_PROJECTION: usize = 0x74db20;
+/// GameSettingsMgr, whose video settings at +0xc0 start with the render width and height.
+const SETTINGS_MANAGER: usize = 0x93df34;
+const RENDER_WIDTH: usize = 0xc0;
+const RENDER_HEIGHT: usize = 0xc4;
+/// The engine's 4:3 "y over x"; other ratios belong to render targets such as reflections.
+const ORIGINAL_ASPECT: f32 = 0.75;
+
 /// The loading screen's state; its byte at +8 is set once the level is loaded.
 const LOADING_SCREEN: usize = 0x93de28;
 const LOADING_FINISHED: usize = 8;
@@ -52,6 +63,17 @@ pub fn on_startup() {
             log!("patched: {}", patch.name);
         } else {
             log!("not patched, unknown code: {}", patch.name);
+        }
+    }
+    if config::get().widescreen {
+        if unsafe { matches(SET_PROJECTION_CALL, SET_PROJECTION_CALL_ORIGINAL) } {
+            let target = set_projection as *const () as isize - (SET_PROJECTION_CALL as isize + 5);
+            let mut call = [0xe8u8, 0, 0, 0, 0];
+            call[1..].copy_from_slice(&(target as i32).to_le_bytes());
+            unsafe { write(SET_PROJECTION_CALL, &call) };
+            log!("patched: widescreen projection");
+        } else {
+            log!("not patched, unknown code: widescreen projection");
         }
     }
     let hooked = unsafe {
@@ -107,4 +129,20 @@ pub fn loading_finished() -> bool {
     }
     let screen = unsafe { *(LOADING_SCREEN as *const usize) };
     screen != 0 && unsafe { *((screen + LOADING_FINISHED) as *const u8) } != 0
+}
+
+/// Hor+ widescreen: keeps the vertical field of view of the 4:3 camera and widens the horizontal
+/// one to the render size, so wider screens show more at the sides instead of a stretched image.
+unsafe extern "thiscall" fn set_projection(renderer: *mut c_void, matrix: *mut f32) {
+    unsafe {
+        let settings = *(SETTINGS_MANAGER as *const usize);
+        let width = *((settings + RENDER_WIDTH) as *const i32);
+        let height = *((settings + RENDER_HEIGHT) as *const i32);
+        let (p00, p11) = (*matrix, *matrix.add(5));
+        if width > 0 && height > 0 && p11 != 0.0 && ((p00 / p11).abs() - ORIGINAL_ASPECT).abs() < 0.01 {
+            *matrix = p00.signum() * p11.abs() * height as f32 / width as f32;
+        }
+        let original: unsafe extern "thiscall" fn(*mut c_void, *mut f32) = std::mem::transmute(SET_VIEW_PROJECTION);
+        original(renderer, matrix);
+    }
 }
