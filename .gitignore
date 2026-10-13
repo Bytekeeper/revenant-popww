@@ -1,0 +1,4 @@
+# Everything derived from the game stays local; only our analysis scripts are tracked.
+/re/*
+!/re/scripts/
+/target/

@@ -1,0 +1,12 @@
+[package]
+name = "popww"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[target.'cfg(windows)'.dependencies]
+minhook = "0.9.0"
+windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_System_SystemServices", "Win32_System_LibraryLoader", "Win32_Storage_FileSystem", "Win32_Security", "Win32_Globalization", "Win32_System_Threading"] }

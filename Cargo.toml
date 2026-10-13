@@ -1,0 +1,14 @@
+[workspace]
+resolver = "2"
+members = ["crates/loader", "crates/popww"]
+
+[workspace.package]
+edition = "2024"
+version = "0.1.0"
+license = "MIT"
+
+[profile.release]
+panic = "abort"
+lto = true
+opt-level = "s"
+strip = true
