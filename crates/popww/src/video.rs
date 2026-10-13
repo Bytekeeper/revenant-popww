@@ -1,4 +1,5 @@
-//! Skippable videos: cinematics and logos end on a key or gamepad press, logos can be left out.
+//! Shorter videos: cinematics and logos end on a key or gamepad press, logos can be left out, and
+//! loading animations stop as soon as the level is loaded.
 
 use std::ffi::{CStr, c_void};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -10,19 +11,21 @@ use windows_sys::Win32::UI::Input::KeyboardAndMouse::{GetAsyncKeyState, VK_ESCAP
 use windows_sys::Win32::UI::WindowsAndMessaging::{GetForegroundWindow, GetWindowThreadProcessId};
 use windows_sys::core::w;
 
-use crate::config;
+use crate::{config, game};
 use crate::log::log;
 
 const LOGOS: &[&str] = &["ubisoft.bik", "intel.bik", "ubimtl.bik", "logorp.bik"];
 /// BinkOpen's first argument is a file handle instead of a name.
 const BINK_FILE_HANDLE: u32 = 0x0080_0000;
 const FRAMES: usize = 0x08;
+const LAST_FRAME: usize = 0x10;
 
 static ORIGINAL_OPEN: AtomicUsize = AtomicUsize::new(0);
 static ORIGINAL_WAIT: AtomicUsize = AtomicUsize::new(0);
 static GOTO: AtomicUsize = AtomicUsize::new(0);
-/// The playing video that may be skipped, and whether all skip buttons were released since it started.
-static SKIPPABLE: AtomicUsize = AtomicUsize::new(0);
+/// The playing video and its kind, and whether all skip buttons were released since it started.
+static CURRENT: AtomicUsize = AtomicUsize::new(0);
+static CURRENT_KIND: AtomicUsize = AtomicUsize::new(Kind::Other as usize);
 static RELEASED: AtomicBool = AtomicBool::new(false);
 
 type BinkOpen = unsafe extern "system" fn(*const u8, u32) -> *mut c_void;
@@ -64,6 +67,19 @@ enum Kind {
     Other = 0,
     Logo = 1,
     Cinematic = 2,
+    /// The loading screen's intro and loop; its outro is the transition into the level and stays.
+    Loading = 3,
+}
+
+impl Kind {
+    fn from(value: usize) -> Kind {
+        match value {
+            1 => Kind::Logo,
+            2 => Kind::Cinematic,
+            3 => Kind::Loading,
+            _ => Kind::Other,
+        }
+    }
 }
 
 /// Kind of the video last opened by name: the game reopens it right away through its own file
@@ -72,15 +88,14 @@ static LAST_KIND: AtomicUsize = AtomicUsize::new(Kind::Other as usize);
 
 unsafe extern "system" fn bink_open(name: *const u8, flags: u32) -> *mut c_void {
     let kind = if flags & BINK_FILE_HANDLE != 0 || name.is_null() {
-        match LAST_KIND.load(Ordering::Relaxed) {
-            1 => Kind::Logo,
-            2 => Kind::Cinematic,
-            _ => Kind::Other,
-        }
+        Kind::from(LAST_KIND.load(Ordering::Relaxed))
     } else {
         let file = unsafe { CStr::from_ptr(name.cast()) }.to_string_lossy().to_ascii_lowercase().replace('/', "\\");
-        let kind = if LOGOS.contains(&file.rsplit('\\').next().unwrap_or_default()) {
+        let base = file.rsplit('\\').next().unwrap_or_default();
+        let kind = if LOGOS.contains(&base) {
             Kind::Logo
+        } else if base.starts_with("loadin") || base.starts_with("loadlop") {
+            Kind::Loading
         } else if file.contains("\\cine\\") {
             Kind::Cinematic
         } else {
@@ -95,28 +110,46 @@ unsafe extern "system" fn bink_open(name: *const u8, flags: u32) -> *mut c_void 
     let original: BinkOpen = unsafe { std::mem::transmute(ORIGINAL_OPEN.load(Ordering::Relaxed)) };
     let video = unsafe { original(name, flags) };
     if !video.is_null() {
-        let skippable = kind != Kind::Other;
-        SKIPPABLE.store(if skippable { video as usize } else { 0 }, Ordering::Relaxed);
+        CURRENT.store(video as usize, Ordering::Relaxed);
+        CURRENT_KIND.store(kind as usize, Ordering::Relaxed);
         RELEASED.store(false, Ordering::Relaxed);
     }
     video
 }
 
 unsafe extern "system" fn bink_wait(video: *mut c_void) -> i32 {
-    if !video.is_null() && SKIPPABLE.load(Ordering::Relaxed) == video as usize {
-        let pressed = skip_pressed();
-        if !pressed {
-            RELEASED.store(true, Ordering::Relaxed);
-        } else if RELEASED.load(Ordering::Relaxed) {
-            SKIPPABLE.store(0, Ordering::Relaxed);
-            let goto: BinkGoto = unsafe { std::mem::transmute(GOTO.load(Ordering::Relaxed)) };
-            // The game ends a video once its last decoded frame is the final one.
-            unsafe { goto(video, *(video.cast::<u8>().add(FRAMES).cast::<u32>()), 0) };
-            log!("skipped video");
+    if !video.is_null() && CURRENT.load(Ordering::Relaxed) == video as usize {
+        let field = |offset: usize| video.cast::<u8>().wrapping_add(offset).cast::<u32>();
+        match Kind::from(CURRENT_KIND.load(Ordering::Relaxed)) {
+            Kind::Logo | Kind::Cinematic if skip_requested() => {
+                CURRENT.store(0, Ordering::Relaxed);
+                let goto: BinkGoto = unsafe { std::mem::transmute(GOTO.load(Ordering::Relaxed)) };
+                // The game ends a video once its last decoded frame is the final one.
+                unsafe { goto(video, *field(FRAMES), 0) };
+                log!("skipped video");
+            }
+            // Runs on the loading thread while the main thread draws the same video, so no Bink call
+            // (BinkGoto hung there); the game only reads this field to see the video has ended.
+            Kind::Loading if game::loading_finished() => unsafe {
+                if *field(LAST_FRAME) != *field(FRAMES) {
+                    *field(LAST_FRAME) = *field(FRAMES);
+                    log!("ended loading video");
+                }
+            },
+            _ => {}
         }
     }
     let original: BinkWait = unsafe { std::mem::transmute(ORIGINAL_WAIT.load(Ordering::Relaxed)) };
     unsafe { original(video) }
+}
+
+/// A skip press that began after the video started.
+fn skip_requested() -> bool {
+    if !skip_pressed() {
+        RELEASED.store(true, Ordering::Relaxed);
+        return false;
+    }
+    RELEASED.load(Ordering::Relaxed)
 }
 
 fn skip_pressed() -> bool {

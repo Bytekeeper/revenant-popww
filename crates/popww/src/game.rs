@@ -33,6 +33,10 @@ const PATCHES: &[Patch] = &[Patch {
 const FIND_AVAILABLE_DISPLAY_MODE: usize = 0x414490;
 const FIND_AVAILABLE_DISPLAY_MODE_START: &[u8] = &[0x56, 0x8b, 0x74, 0x24, 0x08, 0x57, 0x56, 0x8b, 0xf9];
 
+/// The loading screen's state; its byte at +8 is set once the level is loaded.
+const LOADING_SCREEN: usize = 0x93de28;
+const LOADING_FINISHED: usize = 8;
+
 static DONE: AtomicBool = AtomicBool::new(false);
 static ORIGINAL_FIND_MODE: AtomicUsize = AtomicUsize::new(0);
 
@@ -94,4 +98,13 @@ unsafe fn write(address: usize, bytes: &[u8]) {
         std::ptr::copy_nonoverlapping(bytes.as_ptr(), address as *mut u8, bytes.len());
         VirtualProtect(address as *const c_void, bytes.len(), protection, &mut protection);
     }
+}
+
+/// Whether a loading screen is up and the game has finished loading behind it.
+pub fn loading_finished() -> bool {
+    if !DONE.load(Ordering::Relaxed) {
+        return false;
+    }
+    let screen = unsafe { *(LOADING_SCREEN as *const usize) };
+    screen != 0 && unsafe { *((screen + LOADING_FINISHED) as *const u8) } != 0
 }
