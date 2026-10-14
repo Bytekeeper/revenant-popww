@@ -4,6 +4,8 @@ pub mod casefix;
 #[cfg(windows)]
 mod config;
 #[cfg(windows)]
+mod d3d;
+#[cfg(windows)]
 mod game;
 #[cfg(windows)]
 mod hardware;
@@ -53,6 +55,7 @@ mod entry {
             // Hooks go in before pop2.exe's UPX stub runs, so they also cover the unpacked game.
             crate::hooks::install_all();
             crate::video::install();
+            crate::d3d::install();
         }
         TRUE
     }
