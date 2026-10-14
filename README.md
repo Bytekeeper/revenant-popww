@@ -34,9 +34,6 @@ Proton.
 Tested with the GOG version (1.0.0.188). Other versions start but may lack some of the fixes;
 `popww.log` in the game folder says which were applied.
 
-On Windows, EAX needs the Microsoft Visual C++ 2015–2022 runtime (x86), which most systems
-already have; without it the game plays without EAX.
-
 ## Settings
 
 `popww.ini` appears in the game folder on the first start:
@@ -65,8 +62,9 @@ The files land in `target/i686-pc-windows-gnu/release/`. Pushing a `v*` tag buil
 
 ## License
 
-MIT. The release includes `popww-dsoal.dll` ([DSOAL](https://github.com/kcat/dsoal), LGPL 2.1) and
-`dsoal-aldrv.dll` ([OpenAL Soft](https://github.com/kcat/openal-soft), LGPL 2.1), unmodified; their
+MIT. The release includes `popww-dsoal.dll`, [DSOAL](https://github.com/kcat/dsoal) built unmodified
+from the commit named in the workflow, and `dsoal-aldrv.dll`, the
+[OpenAL Soft](https://github.com/kcat/openal-soft) 1.25.2 release; both are LGPL 2.1, and their
 licenses are in `popww-licenses`.
 
 *Prince of Persia* is a trademark of Ubisoft; this project is not affiliated with Ubisoft and
