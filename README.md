@@ -32,8 +32,9 @@ Proton.
    `PrinceOfPersia.exe`. Keep a copy of the original if you want to go back.
 3. Start the game as usual: from GOG Galaxy, Heroic, Lutris or by running `PrinceOfPersia.exe`.
 
-Tested with the GOG version (1.0.0.188). Other versions start but may lack some of the fixes;
-`popww.log` in the game folder says which were applied.
+Tested with the GOG and Steam versions (both 1.0.0.188). Other versions start but may lack some of
+the fixes; `popww.log` in the game folder says which were applied. On Steam, "Verify integrity of
+game files" restores the original `PrinceOfPersia.exe`; copy ours in again afterwards.
 
 ## Settings
 
