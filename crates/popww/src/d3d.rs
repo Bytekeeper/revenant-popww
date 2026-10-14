@@ -26,16 +26,16 @@ const SET_VERTEX_DECLARATION: usize = 87;
 const SET_FVF: usize = 89;
 const CREATE_VERTEX_SHADER: usize = 91;
 const SET_VERTEX_SHADER: usize = 92;
-const SET_VERTEX_SHADER_CONSTANT_F: usize = 94;
-const GET_VERTEX_SHADER_CONSTANT_F: usize = 95;
-const RELEASE: usize = 2;
+pub(crate) const SET_VERTEX_SHADER_CONSTANT_F: usize = 94;
+pub(crate) const GET_VERTEX_SHADER_CONSTANT_F: usize = 95;
+pub(crate) const RELEASE: usize = 2;
 const RESOURCE_GET_TYPE: usize = 10;
 const SURFACE_GET_DESC: usize = 12;
 const TEXTURE_GET_LEVEL_DESC: usize = 17;
 
 const RESOURCE_TYPE_TEXTURE: u32 = 3;
 const USAGE_RENDER_TARGET: u32 = 1;
-const USAGE_POSITION: u8 = 0;
+pub(crate) const USAGE_POSITION: u8 = 0;
 const USAGE_TEXCOORD: u8 = 5;
 const USAGE_POSITIONT: u8 = 9;
 const USAGE_COLOR: u8 = 10;
@@ -51,7 +51,7 @@ static ORIGINAL_SET_SHADER: AtomicUsize = AtomicUsize::new(0);
 static ORIGINAL_DRAW: AtomicUsize = AtomicUsize::new(0);
 static ORIGINAL_DRAW_INDEXED: AtomicUsize = AtomicUsize::new(0);
 
-type Interface = *mut *const usize;
+pub(crate) type Interface = *mut *const usize;
 type Direct3DCreate9 = unsafe extern "system" fn(u32) -> Interface;
 type CreateDevice = unsafe extern "system" fn(Interface, u32, u32, *mut c_void, u32, *mut c_void, *mut Interface) -> i32;
 type CreateShader = unsafe extern "system" fn(Interface, *const u32, *mut Interface) -> i32;
@@ -59,19 +59,19 @@ type CreateDeclaration = unsafe extern "system" fn(Interface, *const Element, *m
 type SetObject = unsafe extern "system" fn(Interface, Interface) -> i32;
 type Draw = unsafe extern "system" fn(Interface, u32, u32, u32) -> i32;
 type DrawIndexed = unsafe extern "system" fn(Interface, u32, i32, u32, u32, u32, u32) -> i32;
-type ShaderConstants = unsafe extern "system" fn(Interface, u32, *mut f32, u32) -> i32;
-type Release = unsafe extern "system" fn(Interface) -> u32;
+pub(crate) type ShaderConstants = unsafe extern "system" fn(Interface, u32, *mut f32, u32) -> i32;
+pub(crate) type Release = unsafe extern "system" fn(Interface) -> u32;
 
 /// D3DVERTEXELEMENT9.
 #[repr(C)]
 #[derive(Clone, Copy)]
-struct Element {
-    stream: u16,
-    offset: u16,
-    kind: u8,
-    method: u8,
-    usage: u8,
-    usage_index: u8,
+pub(crate) struct Element {
+    pub stream: u16,
+    pub offset: u16,
+    pub kind: u8,
+    pub method: u8,
+    pub usage: u8,
+    pub usage_index: u8,
 }
 
 /// A pre-transformed declaration with its `POSITION` twin and the shader that draws through it.
@@ -100,7 +100,7 @@ pub fn install() {
     }
 }
 
-unsafe fn hook(target: *mut c_void, detour: *mut c_void, slot: &AtomicUsize, name: &CStr) {
+pub(crate) unsafe fn hook(target: *mut c_void, detour: *mut c_void, slot: &AtomicUsize, name: &CStr) {
     if slot.load(Ordering::Relaxed) != 0 {
         return;
     }
@@ -116,7 +116,7 @@ unsafe fn hook(target: *mut c_void, detour: *mut c_void, slot: &AtomicUsize, nam
     }
 }
 
-unsafe fn method<T>(object: Interface, index: usize) -> T {
+pub(crate) unsafe fn method<T>(object: Interface, index: usize) -> T {
     unsafe { std::mem::transmute_copy(&*(*object).add(index)) }
 }
 
@@ -156,12 +156,13 @@ unsafe extern "system" fn create_device(
         for (index, detour, slot, name) in hooks {
             unsafe { hook(method(device, index), detour, slot, name) };
         }
+        unsafe { crate::hud::install(device) };
     }
     result
 }
 
 /// The width a 4:3 image takes on the configured screen, relative to the screen width.
-fn scale_2d() -> f32 {
+pub(crate) fn scale_2d() -> f32 {
     let config = config::get();
     if !config.widescreen || config.width == 0 {
         return 1.0;
@@ -179,6 +180,7 @@ unsafe extern "system" fn create_declaration(device: Interface, elements: *const
         return result;
     };
     let mut elements = unsafe { std::slice::from_raw_parts(elements, count + 1) }.to_vec();
+    crate::hud::declaration_created(unsafe { *declaration } as usize, &elements[..count]);
     let Some(position) = elements.iter().position(|e| e.usage == USAGE_POSITIONT && e.usage_index == 0) else {
         return result;
     };
@@ -256,7 +258,12 @@ unsafe extern "system" fn set_fvf(device: Interface, fvf: u32) -> i32 {
 }
 
 unsafe extern "system" fn draw(device: Interface, kind: u32, start: u32, count: u32) -> i32 {
-    unsafe { draw_2d(device, || original::<Draw>(&ORIGINAL_DRAW)(device, kind, start, count)) }
+    let declaration = STATE.lock().map_or(0, |state| state.declaration);
+    unsafe {
+        crate::hud::draw(device, declaration, kind, start, count, || {
+            draw_2d(device, || original::<Draw>(&ORIGINAL_DRAW)(device, kind, start, count))
+        })
+    }
 }
 
 unsafe extern "system" fn draw_indexed(
@@ -281,8 +288,7 @@ unsafe fn draw_2d(device: Interface, draw: impl FnOnce() -> i32) -> i32 {
     });
     let Some((declaration, shader, twin, twin_shader)) = found else { return draw() };
     let Some((width, height)) = (unsafe { target_size(device) }) else { return draw() };
-    let config = config::get();
-    let on_screen = (width, height) == (config.width, config.height);
+    let on_screen = is_screen(width, height);
     let squeeze = if on_screen && !unsafe { fills_screen(device) } { scale_2d() } else { 1.0 };
     let mut mapping = [2.0 * squeeze / width as f32, -2.0 / height as f32, -squeeze, 1.0];
     let mut saved = [0.0f32; 4];
@@ -322,6 +328,15 @@ unsafe fn fills_screen(device: Interface) -> bool {
         method::<Release>(texture, RELEASE)(texture);
         described && desc[2] & USAGE_RENDER_TARGET != 0
     }
+}
+
+fn is_screen(width: u32, height: u32) -> bool {
+    let config = config::get();
+    (width, height) == (config.width, config.height)
+}
+
+pub(crate) unsafe fn draws_on_screen(device: Interface) -> bool {
+    unsafe { target_size(device) }.is_some_and(|(width, height)| is_screen(width, height))
 }
 
 unsafe fn target_size(device: Interface) -> Option<(u32, u32)> {

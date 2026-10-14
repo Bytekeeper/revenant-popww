@@ -17,7 +17,8 @@ Width=0
 Height=0
 ; 1 = fullscreen, 0 = window.
 Fullscreen=1
-; 1 = the 3D view widens with the screen (Hor+), 0 = the original 4:3 view stretched.
+; 1 = wider screens show more at the sides, with menus and HUD in 4:3 (Hor+);
+; 0 = the original behaviour: the view is cropped at top and bottom, menus and HUD stretched.
 Widescreen=1
 
 [Video]

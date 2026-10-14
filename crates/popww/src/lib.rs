@@ -10,6 +10,8 @@ mod game;
 #[cfg(windows)]
 mod hardware;
 #[cfg(windows)]
+mod hud;
+#[cfg(windows)]
 mod hooks;
 #[cfg(windows)]
 mod log;
