@@ -31,11 +31,24 @@ jobs:
       - name: Build
         run: cargo build --release
 
+      - name: Fetch DSOAL
+        run: |
+          curl -sSLo dsoal.zip https://github.com/kcat/dsoal/releases/download/archive/DSOAL_${DSOAL_REVISION}.zip
+          echo "${DSOAL_SHA256}  dsoal.zip" | sha256sum -c
+          unzip -q dsoal.zip -d dsoal
+          unzip -q dsoal/DSOAL_${DSOAL_REVISION}.zip 'DSOAL/*' -d dsoal
+        env:
+          DSOAL_REVISION: r696
+          DSOAL_SHA256: 973eb83136d112bada3fc65b5f5dc218fa825415c15d494e2c97aefb4a953d24
+
       - name: Package
         run: |
-          mkdir -p dist
+          mkdir -p dist/popww-licenses
           cp target/i686-pc-windows-gnu/release/PrinceOfPersia.exe target/i686-pc-windows-gnu/release/popww.dll README.md LICENSE dist/
-          cd dist && zip -9 ../popww-${GITHUB_REF_NAME//\//-}.zip *
+          cp dsoal/DSOAL/Win32/dsound.dll dist/popww-dsoal.dll
+          cp dsoal/DSOAL/Win32/dsoal-aldrv.dll dist/
+          cp dsoal/DSOAL/Documentation/*License*.txt dsoal/DSOAL/Documentation/*Version.txt dist/popww-licenses/
+          cd dist && zip -9 -r ../popww-${GITHUB_REF_NAME//\//-}.zip .
 
       - uses: actions/upload-artifact@v4
         with:

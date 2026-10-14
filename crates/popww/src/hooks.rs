@@ -14,7 +14,7 @@ use windows_sys::Win32::Storage::FileSystem::WIN32_FIND_DATAA;
 use windows_sys::Win32::System::LibraryLoader::{GetModuleHandleW, GetProcAddress};
 use windows_sys::core::{PCSTR, w};
 
-use crate::{casefix, config, game, gamepads, hardware};
+use crate::{casefix, config, game, gamepads, hardware, sound};
 use crate::log::log;
 
 thread_local! {
@@ -169,6 +169,7 @@ unsafe extern "system" fn GetCommandLineA() -> PCSTR {
     // Before the game switches the display mode, so "desktop resolution" is still the desktop's.
     config::get();
     game::on_startup();
+    sound::install();
     let original: unsafe extern "system" fn() -> PCSTR =
         unsafe { std::mem::transmute(GET_COMMAND_LINE_A.load(Ordering::Relaxed)) };
     unsafe { original() }

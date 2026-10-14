@@ -18,6 +18,8 @@ mod hooks;
 #[cfg(windows)]
 mod log;
 #[cfg(windows)]
+mod sound;
+#[cfg(windows)]
 mod video;
 #[cfg(windows)]
 mod xinput;

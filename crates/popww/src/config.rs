@@ -25,6 +25,11 @@ Widescreen=1
 ; 1 leaves out the logo videos at startup. Cinematics end with Esc, Space, Enter or gamepad A/B/Start.
 SkipLogos=1
 
+[Sound]
+; 1 = EAX reverb through DSOAL (popww-dsoal.dll), switched on in the game's sound options;
+; 0 = the system's DirectSound without EAX.
+EAX=1
+
 ; Overrides for the hardware description the old launcher wrote to Hardware.INI,
 ; as [Hardware.<section>] key=value, e.g.:
 ; [Hardware.CAPS]
@@ -57,6 +62,7 @@ pub struct Config {
     pub fullscreen: Option<bool>,
     pub widescreen: bool,
     pub skip_logos: bool,
+    pub eax: bool,
 }
 
 pub fn get() -> &'static Config {
@@ -83,13 +89,15 @@ fn load() -> Config {
         fullscreen: optional("Display", "Fullscreen").map(|v| v != 0),
         widescreen: read("Display", "Widescreen", 1) != 0,
         skip_logos: read("Video", "SkipLogos", 1) != 0,
+        eax: read("Sound", "EAX", 1) != 0,
     };
     log!(
-        "config: resolution={:?} fullscreen={:?} widescreen={} skip_logos={}",
+        "config: resolution={:?} fullscreen={:?} widescreen={} skip_logos={} eax={}",
         config.resolution,
         config.fullscreen,
         config.widescreen,
-        config.skip_logos
+        config.skip_logos,
+        config.eax
     );
     config
 }
