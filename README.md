@@ -1,6 +1,6 @@
-# popww: a modern fix for Prince of Persia: Warrior Within
+# revenant-popww: a modern fix for Prince of Persia: Warrior Within
 
-Copy two files into the game folder and play *Prince of Persia: Warrior Within* (PC, 2004) at any
+Unpack one zip into the game folder and play *Prince of Persia: Warrior Within* (PC, 2004) at any
 resolution, in widescreen, without the old launcher. Works on Windows and on Linux through Wine or
 Proton.
 
@@ -27,7 +27,7 @@ Proton.
 
 ## Install
 
-1. Download `popww-<version>.zip` from the [releases](../../releases).
+1. Download `revenant-popww-<version>.zip` from the [releases](../../releases).
 2. Unpack everything into the game folder (where `pop2.exe` is), replacing the original
    `PrinceOfPersia.exe`. Keep a copy of the original if you want to go back.
 3. Start the game as usual: from GOG Galaxy, Heroic, Lutris or by running `PrinceOfPersia.exe`.

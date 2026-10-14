@@ -61,16 +61,16 @@ jobs:
           cp dsoal/fmt-*/LICENSE dist/popww-licenses/DSOAL-fmt-LICENSE.txt
           cp openal/openal-soft-*-bin/COPYING dist/popww-licenses/OpenALSoft-COPYING.txt
           cp openal/openal-soft-*-bin/LICENSE-pffft dist/popww-licenses/OpenALSoft-LICENSE-pffft.txt
-          cd dist && zip -9 -r ../popww-${GITHUB_REF_NAME//\//-}.zip .
+          cd dist && zip -9 -r ../revenant-popww-${GITHUB_REF_NAME//\//-}.zip .
 
       - uses: actions/upload-artifact@v4
         with:
-          name: popww
+          name: revenant-popww
           path: dist/
 
       - name: Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: popww-*.zip
+          files: revenant-popww-*.zip
           generate_release_notes: true
