@@ -13,6 +13,8 @@ Proton.
 - **Widescreen (Hor+)**: wider screens show more at the sides instead of a stretched or cropped
   picture. Menus and videos keep their 4:3 proportions; the HUD stays round and sits at the
   screen corners.
+- **Smooth motion**: with VSync the game advances in even steps of one display refresh, at any
+  refresh rate, instead of by its jittery frame timer.
 - **Shorter waits**: the logo videos are left out, cinematics end with Esc, Space, Enter or gamepad
   A/B/Start, and loading screens end as soon as the level is loaded.
 - **Xbox controllers** (360, One, Series, Steam's virtual pad) get a console-like layout in new
@@ -44,6 +46,7 @@ already have; without it the game plays without EAX.
 | `[Display] Width`, `Height` | `0` | Resolution; `0` uses the desktop resolution. Remove both lines to use the resolution chosen in the game's graphics options. |
 | `[Display] Fullscreen` | `1` | `0` plays in a window. Remove the line to use the game's own setting. |
 | `[Display] Widescreen` | `1` | `0` keeps the original look: cropped view, stretched menus and HUD. |
+| `[Display] FramePacing` | `1` | `0` lets the game advance by its own measured frame time. |
 | `[Video] SkipLogos` | `1` | `0` shows the logo videos at startup. |
 | `[Sound] EAX` | `1` | `0` uses the system's DirectSound, without EAX. |
 

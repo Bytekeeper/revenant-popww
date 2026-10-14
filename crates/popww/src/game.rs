@@ -68,6 +68,9 @@ pub fn on_startup() {
             log!("not patched, unknown code: {}", patch.name);
         }
     }
+    if config::get().frame_pacing {
+        crate::pacing::install();
+    }
     if config::get().widescreen {
         if unsafe { matches(SET_PROJECTION_CALL, SET_PROJECTION_CALL_ORIGINAL) } {
             let target = set_projection as *const () as isize - (SET_PROJECTION_CALL as isize + 5);
@@ -110,7 +113,7 @@ unsafe extern "thiscall" fn find_available_display_mode(manager: *mut c_void, se
     }
 }
 
-unsafe fn matches(address: usize, expected: &[u8]) -> bool {
+pub(crate) unsafe fn matches(address: usize, expected: &[u8]) -> bool {
     let mut info: MEMORY_BASIC_INFORMATION = unsafe { std::mem::zeroed() };
     let queried = unsafe { VirtualQuery(address as *const c_void, &mut info, size_of::<MEMORY_BASIC_INFORMATION>()) };
     let readable = queried != 0
@@ -120,7 +123,7 @@ unsafe fn matches(address: usize, expected: &[u8]) -> bool {
     readable && unsafe { std::slice::from_raw_parts(address as *const u8, expected.len()) } == expected
 }
 
-unsafe fn write(address: usize, bytes: &[u8]) {
+pub(crate) unsafe fn write(address: usize, bytes: &[u8]) {
     let mut protection = 0;
     unsafe {
         VirtualProtect(address as *const c_void, bytes.len(), PAGE_EXECUTE_READWRITE, &mut protection);

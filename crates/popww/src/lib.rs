@@ -17,6 +17,7 @@ mod hud;
 mod hooks;
 #[cfg(windows)]
 mod log;
+mod pacing;
 #[cfg(windows)]
 mod sound;
 #[cfg(windows)]

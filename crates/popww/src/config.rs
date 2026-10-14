@@ -20,6 +20,8 @@ Fullscreen=1
 ; 1 = wider screens show more at the sides, with menus and HUD in 4:3 (Hor+);
 ; 0 = the original behaviour: the view is cropped at top and bottom, menus and HUD stretched.
 Widescreen=1
+; 1 = with VSync, the game advances in even steps of one refresh; 0 = by the measured frame time.
+FramePacing=1
 
 [Video]
 ; 1 leaves out the logo videos at startup. Cinematics end with Esc, Space, Enter or gamepad A/B/Start.
@@ -61,6 +63,7 @@ pub struct Config {
     pub resolution: Option<(u32, u32)>,
     pub fullscreen: Option<bool>,
     pub widescreen: bool,
+    pub frame_pacing: bool,
     pub skip_logos: bool,
     pub eax: bool,
 }
@@ -88,14 +91,16 @@ fn load() -> Config {
         resolution,
         fullscreen: optional("Display", "Fullscreen").map(|v| v != 0),
         widescreen: read("Display", "Widescreen", 1) != 0,
+        frame_pacing: read("Display", "FramePacing", 1) != 0,
         skip_logos: read("Video", "SkipLogos", 1) != 0,
         eax: read("Sound", "EAX", 1) != 0,
     };
     log!(
-        "config: resolution={:?} fullscreen={:?} widescreen={} skip_logos={} eax={}",
+        "config: resolution={:?} fullscreen={:?} widescreen={} frame_pacing={} skip_logos={} eax={}",
         config.resolution,
         config.fullscreen,
         config.widescreen,
+        config.frame_pacing,
         config.skip_logos,
         config.eax
     );

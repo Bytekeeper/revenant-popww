@@ -78,6 +78,11 @@ struct PresentParameters {
     swap_effect: u32,
     device_window: HWND,
     windowed: i32,
+    enable_auto_depth_stencil: i32,
+    auto_depth_stencil_format: u32,
+    flags: u32,
+    refresh_rate: u32,
+    presentation_interval: u32,
 }
 type CreateShader = unsafe extern "system" fn(Interface, *const u32, *mut Interface) -> i32;
 type CreateDeclaration = unsafe extern "system" fn(Interface, *const Element, *mut Interface) -> i32;
@@ -241,7 +246,12 @@ unsafe fn remember_screen(parameters: *const PresentParameters, focus: *mut c_vo
         }
     }
     SCREEN.store(u64::from(width) << 32 | u64::from(height), Ordering::Relaxed);
-    log!("screen {width}x{height}");
+    log!(
+        "screen {width}x{height} windowed={} refresh={} interval={:#x}",
+        parameters.windowed,
+        parameters.refresh_rate,
+        parameters.presentation_interval
+    );
 }
 
 fn screen() -> (u32, u32) {
@@ -443,4 +453,3 @@ unsafe fn target_size(device: Interface) -> Option<(u32, u32)> {
         described.then_some((desc[6], desc[7]))
     }
 }
-
