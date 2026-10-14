@@ -95,20 +95,25 @@ unsafe extern "system" fn set_constants(device: Interface, start: u32, data: *mu
 
 /// A device reset recreates the game's dynamic buffers, possibly at the old addresses.
 pub fn reset() {
+    // A locked shadow is still the game's write target.
     if let Ok(mut state) = STATE.lock() {
-        state.shadows.clear();
+        state.shadows.retain(|s| s.locked.is_some());
     }
 }
 
+/// The game writes into the shadow and the unlock copies its range to the buffer: reading the
+/// buffer back is slow where it lives in GPU-visible memory, as with DXVK.
 unsafe extern "system" fn lock(buffer: Interface, offset: u32, size: u32, data: *mut *mut u8, flags: u32) -> i32 {
     let result = unsafe { std::mem::transmute::<usize, Lock>(ORIGINAL_LOCK.load(Ordering::Relaxed))(buffer, offset, size, data, flags) };
     if result >= 0
         && !data.is_null()
         && let Ok(mut state) = STATE.lock()
         && let Some(shadow) = state.shadows.iter_mut().find(|s| s.buffer == buffer as usize)
+        && (offset as usize) < shadow.data.len()
     {
-        let end = if size == 0 { shadow.data.len() } else { (offset + size) as usize };
-        shadow.locked = Some((unsafe { *data } as usize, offset as usize, end.min(shadow.data.len())));
+        let (start, end) = (offset as usize, if size == 0 { shadow.data.len() } else { (offset + size) as usize });
+        shadow.locked = Some((unsafe { *data } as usize, start, end.min(shadow.data.len())));
+        unsafe { *data = shadow.data.as_mut_ptr().add(start) };
     }
     result
 }
@@ -117,10 +122,8 @@ unsafe extern "system" fn unlock(buffer: Interface) -> i32 {
     if let Ok(mut state) = STATE.lock()
         && let Some(shadow) = state.shadows.iter_mut().find(|s| s.buffer == buffer as usize)
         && let Some((pointer, start, end)) = shadow.locked.take()
-        && start < end
     {
-        let written = unsafe { std::slice::from_raw_parts(pointer as *const u8, end - start) };
-        shadow.data[start..end].copy_from_slice(written);
+        unsafe { std::ptr::copy_nonoverlapping(shadow.data.as_ptr().add(start), pointer as *mut u8, end - start) };
     }
     unsafe { std::mem::transmute::<usize, Unlock>(ORIGINAL_UNLOCK.load(Ordering::Relaxed))(buffer) }
 }
