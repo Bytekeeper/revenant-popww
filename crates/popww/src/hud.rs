@@ -19,6 +19,8 @@ const BUFFER_GET_DESC: usize = 13;
 const POOL_DEFAULT: u32 = 0;
 const TYPE_FLOAT3: u8 = 2;
 const TYPE_FLOAT4: u8 = 3;
+/// Normalized x beyond which a draw counts as reaching the screen edge.
+const FULL_WIDTH: f32 = 0.99;
 const MAX_BUFFER_SIZE: usize = 4 << 20;
 
 static ORIGINAL_SET_CONSTANTS: AtomicUsize = AtomicUsize::new(0);
@@ -123,8 +125,12 @@ pub unsafe fn draw(device: Interface, declaration: usize, kind: u32, start: u32,
     if !is_hud_camera(&matrix) || !unsafe { d3d::draws_on_screen(device) } {
         return draw();
     }
-    let centre = unsafe { screen_centre(device, declaration, kind, start, count, &matrix) };
-    let Some(centre) = centre else { return draw() };
+    let Some((left, right)) = (unsafe { screen_extent(device, declaration, kind, start, count, &matrix) }) else { return draw() };
+    // Backgrounds such as the pause menu's tint cover the whole screen.
+    if left <= -FULL_WIDTH && right >= FULL_WIDTH {
+        return draw();
+    }
+    let centre = (left + right) / 2.0;
     // Narrowed to 4:3 proportions towards the nearest screen edge, or the middle.
     let anchor = if centre < -1.0 / 3.0 {
         scale - 1.0
@@ -149,8 +155,8 @@ fn is_hud_camera(m: &[f32; 16]) -> bool {
     m[0] != 0.0 && m[1] == 0.0 && m[2] == 0.0 && m[3] == 0.0 && m[15] == 0.0
 }
 
-/// The middle of the draw's horizontal extent in normalized screen coordinates.
-unsafe fn screen_centre(device: Interface, declaration: usize, kind: u32, start: u32, count: u32, m: &[f32; 16]) -> Option<f32> {
+/// The draw's horizontal extent in normalized screen coordinates.
+unsafe fn screen_extent(device: Interface, declaration: usize, kind: u32, start: u32, count: u32, m: &[f32; 16]) -> Option<(f32, f32)> {
     type GetStreamSource = unsafe extern "system" fn(Interface, u32, *mut Interface, *mut u32, *mut u32) -> i32;
     type GetDesc = unsafe extern "system" fn(Interface, *mut [u32; 6]) -> i32;
     let (stream, position) = STATE.lock().ok()?.positions.iter().find(|p| p.0 == declaration).map(|p| (p.1, p.2))?;
@@ -197,5 +203,5 @@ unsafe fn screen_centre(device: Interface, declaration: usize, kind: u32, start:
         low = low.min(x);
         high = high.max(x);
     }
-    (low <= high).then_some((low + high) / 2.0)
+    (low <= high).then_some((low, high))
 }
