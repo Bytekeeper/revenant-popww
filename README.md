@@ -59,7 +59,7 @@ rustup target add i686-pc-windows-gnu
 cargo build --release
 ```
 
-The files land in `target/i686-pc-windows-gnu/release/`. Pushing a `v*` tag builds a release on GitHub.
+The files land in `target/i686-pc-windows-gnu/release/`. Pushing any tag builds a release on GitHub.
 
 ## License
 
