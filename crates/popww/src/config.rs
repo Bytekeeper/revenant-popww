@@ -12,10 +12,10 @@ const DEFAULT_INI: &str = "\
 ; popww settings for Prince of Persia: Warrior Within.
 
 [Display]
-; Resolution; 0 uses the desktop resolution.
+; Resolution; 0 uses the desktop resolution. Without these lines the game's own setting applies.
 Width=0
 Height=0
-; 1 = fullscreen, 0 = window.
+; 1 = fullscreen, 0 = window. Without this line the game's own setting applies.
 Fullscreen=1
 ; 1 = wider screens show more at the sides, with menus and HUD in 4:3 (Hor+);
 ; 0 = the original behaviour: the view is cropped at top and bottom, menus and HUD stretched.
@@ -52,9 +52,9 @@ pub fn hardware_override(section: &str, key: &str) -> Option<String> {
 }
 
 pub struct Config {
-    pub width: u32,
-    pub height: u32,
-    pub fullscreen: bool,
+    /// The display mode to force; None leaves the game's setting.
+    pub resolution: Option<(u32, u32)>,
+    pub fullscreen: Option<bool>,
     pub widescreen: bool,
     pub skip_logos: bool,
 }
@@ -70,24 +70,32 @@ fn load() -> Config {
         log!("wrote default {}", path.display());
     }
     let read = |section: &str, key: &str, default: i32| read_int(&path, section, key, default);
-    let (desktop_width, desktop_height) = desktop_resolution();
+    let optional = |section: &str, key: &str| Some(read(section, key, MISSING)).filter(|&v| v != MISSING);
+    let resolution = match (optional("Display", "Width"), optional("Display", "Height")) {
+        (Some(width), Some(height)) => {
+            let (desktop_width, desktop_height) = desktop_resolution();
+            Some((positive_or(width, desktop_width), positive_or(height, desktop_height)))
+        }
+        _ => None,
+    };
     let config = Config {
-        width: positive_or(read("Display", "Width", 0), desktop_width),
-        height: positive_or(read("Display", "Height", 0), desktop_height),
-        fullscreen: read("Display", "Fullscreen", 1) != 0,
+        resolution,
+        fullscreen: optional("Display", "Fullscreen").map(|v| v != 0),
         widescreen: read("Display", "Widescreen", 1) != 0,
         skip_logos: read("Video", "SkipLogos", 1) != 0,
     };
     log!(
-        "config: {}x{} fullscreen={} widescreen={} skip_logos={}",
-        config.width,
-        config.height,
+        "config: resolution={:?} fullscreen={:?} widescreen={} skip_logos={}",
+        config.resolution,
         config.fullscreen,
         config.widescreen,
         config.skip_logos
     );
     config
 }
+
+/// What GetPrivateProfileInt returns for a missing key; no real setting uses it.
+const MISSING: i32 = i32::MIN;
 
 fn positive_or(value: i32, fallback: u32) -> u32 {
     u32::try_from(value).ok().filter(|&v| v > 0).unwrap_or(fallback)

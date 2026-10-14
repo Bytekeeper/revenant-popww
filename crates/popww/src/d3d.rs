@@ -6,10 +6,15 @@
 
 use std::ffi::{CStr, c_void};
 use std::sync::Mutex;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 
 use minhook::MinHook;
+use windows_sys::Win32::Foundation::{HWND, RECT};
 use windows_sys::Win32::System::LibraryLoader::{GetModuleHandleW, GetProcAddress};
+use windows_sys::Win32::UI::WindowsAndMessaging::{
+    AdjustWindowRectEx, GWL_EXSTYLE, GWL_STYLE, GetClientRect, GetWindowLongW, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOZORDER,
+    SetWindowPos,
+};
 use windows_sys::core::w;
 
 use crate::config;
@@ -17,6 +22,7 @@ use crate::log::log;
 
 // IDirect3D9, IDirect3DDevice9 and resource vtable slots.
 const CREATE_DEVICE: usize = 16;
+const RESET: usize = 16;
 const GET_RENDER_TARGET: usize = 38;
 const GET_TEXTURE: usize = 64;
 const DRAW_PRIMITIVE: usize = 81;
@@ -44,6 +50,10 @@ const MAX_ELEMENTS: usize = 16;
 
 static ORIGINAL_CREATE: AtomicUsize = AtomicUsize::new(0);
 static ORIGINAL_CREATE_DEVICE: AtomicUsize = AtomicUsize::new(0);
+static ORIGINAL_RESET: AtomicUsize = AtomicUsize::new(0);
+/// The back buffer's width and height, packed; 0 until the device exists.
+static SCREEN: AtomicU64 = AtomicU64::new(0);
+static WINDOW: AtomicUsize = AtomicUsize::new(0);
 static ORIGINAL_CREATE_DECLARATION: AtomicUsize = AtomicUsize::new(0);
 static ORIGINAL_SET_DECLARATION: AtomicUsize = AtomicUsize::new(0);
 static ORIGINAL_SET_FVF: AtomicUsize = AtomicUsize::new(0);
@@ -53,7 +63,22 @@ static ORIGINAL_DRAW_INDEXED: AtomicUsize = AtomicUsize::new(0);
 
 pub(crate) type Interface = *mut *const usize;
 type Direct3DCreate9 = unsafe extern "system" fn(u32) -> Interface;
-type CreateDevice = unsafe extern "system" fn(Interface, u32, u32, *mut c_void, u32, *mut c_void, *mut Interface) -> i32;
+type CreateDevice = unsafe extern "system" fn(Interface, u32, u32, *mut c_void, u32, *mut PresentParameters, *mut Interface) -> i32;
+type Reset = unsafe extern "system" fn(Interface, *mut PresentParameters) -> i32;
+
+/// The start of D3DPRESENT_PARAMETERS.
+#[repr(C)]
+struct PresentParameters {
+    back_buffer_width: u32,
+    back_buffer_height: u32,
+    back_buffer_format: u32,
+    back_buffer_count: u32,
+    multi_sample_type: u32,
+    multi_sample_quality: u32,
+    swap_effect: u32,
+    device_window: HWND,
+    windowed: i32,
+}
 type CreateShader = unsafe extern "system" fn(Interface, *const u32, *mut Interface) -> i32;
 type CreateDeclaration = unsafe extern "system" fn(Interface, *const Element, *mut Interface) -> i32;
 type SetObject = unsafe extern "system" fn(Interface, Interface) -> i32;
@@ -126,7 +151,7 @@ fn original<T>(slot: &AtomicUsize) -> T {
 
 unsafe extern "system" fn direct3d_create9(version: u32) -> Interface {
     let d3d = unsafe { original::<Direct3DCreate9>(&ORIGINAL_CREATE)(version) };
-    if !d3d.is_null() && scale_2d() < 1.0 {
+    if !d3d.is_null() && config::get().widescreen {
         unsafe { hook(method(d3d, CREATE_DEVICE), create_device as *mut c_void, &ORIGINAL_CREATE_DEVICE, c"CreateDevice") };
     }
     d3d
@@ -138,14 +163,16 @@ unsafe extern "system" fn create_device(
     device_type: u32,
     window: *mut c_void,
     flags: u32,
-    parameters: *mut c_void,
+    parameters: *mut PresentParameters,
     device: *mut Interface,
 ) -> i32 {
     let create: CreateDevice = original(&ORIGINAL_CREATE_DEVICE);
     let result = unsafe { create(d3d, adapter, device_type, window, flags, parameters, device) };
     if result >= 0 && !device.is_null() && unsafe { !(*device).is_null() } {
+        unsafe { remember_screen(parameters, window) };
         let device = unsafe { *device };
-        let hooks: [(usize, *mut c_void, &AtomicUsize, &CStr); 6] = [
+        let hooks: [(usize, *mut c_void, &AtomicUsize, &CStr); 7] = [
+            (RESET, reset as *mut c_void, &ORIGINAL_RESET, c"Reset"),
             (SET_FVF, set_fvf as *mut c_void, &ORIGINAL_SET_FVF, c"SetFVF"),
             (CREATE_VERTEX_DECLARATION, create_declaration as *mut c_void, &ORIGINAL_CREATE_DECLARATION, c"CreateVertexDeclaration"),
             (SET_VERTEX_SHADER, set_shader as *mut c_void, &ORIGINAL_SET_SHADER, c"SetVertexShader"),
@@ -161,13 +188,74 @@ unsafe extern "system" fn create_device(
     result
 }
 
-/// The width a 4:3 image takes on the configured screen, relative to the screen width.
+/// A resolution change in the game resets the device with the new back buffer size.
+unsafe extern "system" fn reset(device: Interface, parameters: *mut PresentParameters) -> i32 {
+    let result = unsafe { original::<Reset>(&ORIGINAL_RESET)(device, parameters) };
+    if result >= 0 {
+        unsafe { remember_screen(parameters, std::ptr::null_mut()) };
+        crate::hud::reset();
+        if unsafe { parameters.as_ref() }.is_some_and(|p| p.windowed != 0) {
+            unsafe { fit_window() };
+        }
+    }
+    result
+}
+
+/// The game keeps its window size when the resolution changes, which scales the picture.
+unsafe fn fit_window() {
+    let window = WINDOW.load(Ordering::Relaxed) as HWND;
+    let (width, height) = screen();
+    if window.is_null() || width == 0 || height == 0 {
+        return;
+    }
+    let mut rect = RECT { left: 0, top: 0, right: width as i32, bottom: height as i32 };
+    unsafe {
+        let style = GetWindowLongW(window, GWL_STYLE) as u32;
+        let ex_style = GetWindowLongW(window, GWL_EXSTYLE) as u32;
+        AdjustWindowRectEx(&mut rect, style, 0, ex_style);
+        SetWindowPos(
+            window,
+            std::ptr::null_mut(),
+            0,
+            0,
+            rect.right - rect.left,
+            rect.bottom - rect.top,
+            SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE,
+        );
+    }
+}
+
+/// A zero back buffer size means the window's client area.
+unsafe fn remember_screen(parameters: *const PresentParameters, focus: *mut c_void) {
+    let Some(parameters) = (unsafe { parameters.as_ref() }) else { return };
+    let (mut width, mut height) = (parameters.back_buffer_width, parameters.back_buffer_height);
+    let window = if parameters.device_window.is_null() { focus } else { parameters.device_window };
+    if !window.is_null() {
+        WINDOW.store(window as usize, Ordering::Relaxed);
+    }
+    let window = WINDOW.load(Ordering::Relaxed) as HWND;
+    if width == 0 || height == 0 {
+        let mut rect: RECT = unsafe { std::mem::zeroed() };
+        if unsafe { GetClientRect(window, &mut rect) } != 0 {
+            (width, height) = ((rect.right - rect.left) as u32, (rect.bottom - rect.top) as u32);
+        }
+    }
+    SCREEN.store(u64::from(width) << 32 | u64::from(height), Ordering::Relaxed);
+    log!("screen {width}x{height}");
+}
+
+fn screen() -> (u32, u32) {
+    let screen = SCREEN.load(Ordering::Relaxed);
+    ((screen >> 32) as u32, screen as u32)
+}
+
+/// The width a 4:3 image takes on the screen, relative to the screen width.
 pub(crate) fn scale_2d() -> f32 {
-    let config = config::get();
-    if !config.widescreen || config.width == 0 {
+    let (width, height) = screen();
+    if !config::get().widescreen || width == 0 || height == 0 {
         return 1.0;
     }
-    (4.0 * config.height as f32 / (3.0 * config.width as f32)).min(1.0)
+    (4.0 * height as f32 / (3.0 * width as f32)).min(1.0)
 }
 
 unsafe extern "system" fn create_declaration(device: Interface, elements: *const Element, declaration: *mut Interface) -> i32 {
@@ -282,6 +370,9 @@ unsafe extern "system" fn draw_indexed(
 
 /// Runs a draw; a pre-transformed one goes through its twin with the pixel mapping in c95.
 unsafe fn draw_2d(device: Interface, draw: impl FnOnce() -> i32) -> i32 {
+    if scale_2d() >= 1.0 {
+        return draw();
+    }
     let found = STATE.lock().ok().and_then(|state| {
         let twin = state.twins.iter().find(|t| t.declaration == state.declaration)?;
         Some((state.declaration, state.shader, twin.twin, twin.shader))
@@ -331,8 +422,7 @@ unsafe fn fills_screen(device: Interface) -> bool {
 }
 
 fn is_screen(width: u32, height: u32) -> bool {
-    let config = config::get();
-    (width, height) == (config.width, config.height)
+    (width, height) == screen()
 }
 
 pub(crate) unsafe fn draws_on_screen(device: Interface) -> bool {

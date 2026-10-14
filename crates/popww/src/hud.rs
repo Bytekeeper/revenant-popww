@@ -93,6 +93,13 @@ unsafe extern "system" fn set_constants(device: Interface, start: u32, data: *mu
     unsafe { std::mem::transmute::<usize, d3d::ShaderConstants>(ORIGINAL_SET_CONSTANTS.load(Ordering::Relaxed))(device, start, data, count) }
 }
 
+/// A device reset recreates the game's dynamic buffers, possibly at the old addresses.
+pub fn reset() {
+    if let Ok(mut state) = STATE.lock() {
+        state.shadows.clear();
+    }
+}
+
 unsafe extern "system" fn lock(buffer: Interface, offset: u32, size: u32, data: *mut *mut u8, flags: u32) -> i32 {
     let result = unsafe { std::mem::transmute::<usize, Lock>(ORIGINAL_LOCK.load(Ordering::Relaxed))(buffer, offset, size, data, flags) };
     if result >= 0
@@ -121,6 +128,9 @@ unsafe extern "system" fn unlock(buffer: Interface) -> i32 {
 /// Runs a draw; a HUD draw is narrowed to 4:3 proportions.
 pub unsafe fn draw(device: Interface, declaration: usize, kind: u32, start: u32, count: u32, draw: impl FnOnce() -> i32) -> i32 {
     let scale = d3d::scale_2d();
+    if scale >= 1.0 {
+        return draw();
+    }
     let Ok(mut matrix) = STATE.lock().map(|state| state.matrix) else { return draw() };
     if !is_hud_camera(&matrix) || !unsafe { d3d::draws_on_screen(device) } {
         return draw();

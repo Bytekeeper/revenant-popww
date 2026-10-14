@@ -92,13 +92,17 @@ pub fn on_startup() {
     }
 }
 
-/// The game's video settings start with width, height and the fullscreen flag.
+/// The game's video settings start with width, height and the fullscreen flag; popww.ini may override them.
 unsafe extern "thiscall" fn find_available_display_mode(manager: *mut c_void, settings: *mut u32) {
     let config = config::get();
     unsafe {
-        *settings = config.width;
-        *settings.add(1) = config.height;
-        *settings.add(2) = u32::from(config.fullscreen);
+        if let Some((width, height)) = config.resolution {
+            *settings = width;
+            *settings.add(1) = height;
+        }
+        if let Some(fullscreen) = config.fullscreen {
+            *settings.add(2) = u32::from(fullscreen);
+        }
         let original: unsafe extern "thiscall" fn(*mut c_void, *mut u32) =
             std::mem::transmute(ORIGINAL_FIND_MODE.load(Ordering::Relaxed));
         original(manager, settings);

@@ -36,8 +36,8 @@ Tested with the GOG version (1.0.0.188). Other versions start but may lack some 
 
 | Setting | Default | Meaning |
 | --- | --- | --- |
-| `[Display] Width`, `Height` | `0` | Resolution; `0` uses the desktop resolution. |
-| `[Display] Fullscreen` | `1` | `0` plays in a window. |
+| `[Display] Width`, `Height` | `0` | Resolution; `0` uses the desktop resolution. Remove both lines to use the resolution chosen in the game's graphics options. |
+| `[Display] Fullscreen` | `1` | `0` plays in a window. Remove the line to use the game's own setting. |
 | `[Display] Widescreen` | `1` | `0` keeps the original look: cropped view, stretched menus and HUD. |
 | `[Video] SkipLogos` | `1` | `0` shows the logo videos at startup. |
 
