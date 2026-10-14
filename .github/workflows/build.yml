@@ -1,0 +1,50 @@
+name: Build
+
+on:
+  push:
+    branches: [master]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-mingw-w64-i686
+          rustup toolchain install stable --profile minimal --target i686-pc-windows-gnu
+          rustup default stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Test
+        run: cargo test -p popww --target x86_64-unknown-linux-gnu
+
+      - name: Build
+        run: cargo build --release
+
+      - name: Package
+        run: |
+          mkdir -p dist
+          cp target/i686-pc-windows-gnu/release/PrinceOfPersia.exe target/i686-pc-windows-gnu/release/popww.dll README.md LICENSE dist/
+          cd dist && zip -9 ../popww-${GITHUB_REF_NAME//\//-}.zip *
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: popww
+          path: dist/
+
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: popww-*.zip
+          generate_release_notes: true
