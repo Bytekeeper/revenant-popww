@@ -2,7 +2,7 @@
 # Runs the test copy windowed and plays a script of timed steps: "<seconds>:shot" or "<seconds>:key:<keysym>".
 # Usage: play.sh <name> <step...> < popww.ini
 P=/home/dante/projects/pop-ww
-T="$P/re/Test Games/Prince of Persia - Warrior Within"
+T="${GAME_DIR:-$P/re/Test Games/Prince of Persia - Warrior Within}"
 W=~/.config/heroic/tools/proton/Proton-GE-latest/files
 name=$1; shift
 mkdir -p $P/re/shots
