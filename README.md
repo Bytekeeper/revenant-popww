@@ -19,7 +19,8 @@ Proton.
   A/B/Start, and loading screens end as soon as the level is loaded.
 - **Xbox controllers** (360, One, Series, Steam's virtual pad) get a console-like layout in new
   profiles: A jump, X attack, Y secondary weapon, B pick up/throw, RT block, LT rewind, Start
-  pause. Existing profiles keep their bindings; change them under Options > Controls.
+  pause. Existing profiles keep their bindings; change them under Options > Controls. Prompts and
+  the controls menu name the pad's buttons (X, RT) instead of "Btn 3" or "Z Axis".
 - **EAX sound**: reverb and echo in halls and caves through [DSOAL](https://github.com/kcat/dsoal), on
   any sound card and on Wine/Proton without DLL overrides. Switch it on under Options > Sound > EAX.
 - **Wine/Proton**: file names are matched regardless of case, and the white menu background is gone.

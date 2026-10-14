@@ -68,6 +68,7 @@ pub fn on_startup() {
             log!("not patched, unknown code: {}", patch.name);
         }
     }
+    crate::pad_names::install();
     if config::get().frame_pacing {
         crate::pacing::install();
     }

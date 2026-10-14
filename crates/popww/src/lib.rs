@@ -19,6 +19,8 @@ mod hooks;
 mod log;
 mod pacing;
 #[cfg(windows)]
+mod pad_names;
+#[cfg(windows)]
 mod sound;
 #[cfg(windows)]
 mod video;
