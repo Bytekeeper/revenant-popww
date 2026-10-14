@@ -14,7 +14,7 @@ use windows_sys::Win32::Storage::FileSystem::WIN32_FIND_DATAA;
 use windows_sys::Win32::System::LibraryLoader::{GetModuleHandleW, GetProcAddress};
 use windows_sys::core::{PCSTR, w};
 
-use crate::{casefix, config, game, hardware};
+use crate::{casefix, config, game, gamepads, hardware};
 use crate::log::log;
 
 thread_local! {
@@ -29,7 +29,14 @@ unsafe fn fix(path: PCSTR) -> Option<CString> {
     IN_HOOK.set(true);
     let original = unsafe { CStr::from_ptr(path.cast()) };
     let fixed = to_wide(original.to_bytes())
-        .and_then(|wide| casefix::resolve(&PathBuf::from(OsString::from_wide(&wide))))
+        .and_then(|wide| {
+            let path = PathBuf::from(OsString::from_wide(&wide));
+            let real = casefix::resolve(&path);
+            if gamepads::is_table(&path) {
+                return gamepads::extended(real.as_deref().unwrap_or(&path)).map(PathBuf::from);
+            }
+            real
+        })
         .and_then(|real| to_ansi(&real.as_os_str().encode_wide().collect::<Vec<_>>()));
     if let Some(fixed) = &fixed {
         log!("path {} -> {}", original.to_string_lossy(), fixed.to_string_lossy());

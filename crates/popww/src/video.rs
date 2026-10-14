@@ -5,13 +5,13 @@ use std::ffi::{CStr, c_void};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 use minhook::MinHook;
-use windows_sys::Win32::System::LibraryLoader::{GetModuleHandleW, GetProcAddress, LoadLibraryW};
+use windows_sys::Win32::System::LibraryLoader::{GetModuleHandleW, GetProcAddress};
 use windows_sys::Win32::System::Threading::GetCurrentProcessId;
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::{GetAsyncKeyState, VK_ESCAPE, VK_RETURN, VK_SPACE};
 use windows_sys::Win32::UI::WindowsAndMessaging::{GetForegroundWindow, GetWindowThreadProcessId};
 use windows_sys::core::w;
 
-use crate::{config, game};
+use crate::{config, game, xinput};
 use crate::log::log;
 
 const LOGOS: &[&str] = &["ubisoft.bik", "intel.bik", "ubimtl.bik", "logorp.bik"];
@@ -165,40 +165,6 @@ fn skip_pressed() -> bool {
     key(VK_ESCAPE) || key(VK_SPACE) || key(VK_RETURN) || gamepad_pressed()
 }
 
-const XINPUT_A: u16 = 0x1000;
-const XINPUT_B: u16 = 0x2000;
-const XINPUT_START: u16 = 0x0010;
-
-#[repr(C)]
-#[derive(Default)]
-struct XInputState {
-    packet: u32,
-    buttons: u16,
-    triggers: [u8; 2],
-    thumbs: [i16; 4],
-}
-
-type XInputGetState = unsafe extern "system" fn(u32, *mut XInputState) -> u32;
-
 fn gamepad_pressed() -> bool {
-    static GET_STATE: AtomicUsize = AtomicUsize::new(usize::MAX);
-    let mut get_state = GET_STATE.load(Ordering::Relaxed);
-    if get_state == usize::MAX {
-        let module = unsafe { LoadLibraryW(w!("xinput1_3.dll")) };
-        get_state = if module.is_null() {
-            0
-        } else {
-            unsafe { GetProcAddress(module, c"XInputGetState".as_ptr().cast()) }.map_or(0, |f| f as usize)
-        };
-        GET_STATE.store(get_state, Ordering::Relaxed);
-    }
-    if get_state == 0 {
-        return false;
-    }
-    let get_state: XInputGetState = unsafe { std::mem::transmute(get_state) };
-    (0..4).any(|pad| {
-        let mut state = XInputState::default();
-        let connected = unsafe { get_state(pad, &mut state) } == 0;
-        connected && state.buttons & (XINPUT_A | XINPUT_B | XINPUT_START) != 0
-    })
+    xinput::first_pad().is_some_and(|pad| pad.buttons & (xinput::A | xinput::B | xinput::START) != 0)
 }

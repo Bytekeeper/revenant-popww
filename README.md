@@ -15,6 +15,9 @@ Proton.
   screen corners.
 - **Shorter waits**: the logo videos are left out, cinematics end with Esc, Space, Enter or gamepad
   A/B/Start, and loading screens end as soon as the level is loaded.
+- **Xbox controllers** (360, One, Series, Steam's virtual pad) get a console-like layout in new
+  profiles: A jump, X attack, Y secondary weapon, B pick up/throw, RT block, LT rewind, Start
+  pause. Existing profiles keep their bindings; change them under Options > Controls.
 - **Wine/Proton**: file names are matched regardless of case, and the white menu background is gone.
 
 ## Install

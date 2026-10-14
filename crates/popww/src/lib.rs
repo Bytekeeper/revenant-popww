@@ -8,6 +8,8 @@ mod d3d;
 #[cfg(windows)]
 mod game;
 #[cfg(windows)]
+mod gamepads;
+#[cfg(windows)]
 mod hardware;
 #[cfg(windows)]
 mod hud;
@@ -17,6 +19,8 @@ mod hooks;
 mod log;
 #[cfg(windows)]
 mod video;
+#[cfg(windows)]
+mod xinput;
 
 #[cfg(windows)]
 static MODULE_DIR: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
